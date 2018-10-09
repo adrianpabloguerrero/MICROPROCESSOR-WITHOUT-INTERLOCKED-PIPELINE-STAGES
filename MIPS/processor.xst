@@ -1,0 +1,5 @@
+set -tmpdir "D:/MIPS/xst/projnav.tmp"
+set -xsthdpdir "D:/MIPS/xst"
+elaborate
+-ifn processor.prj
+-ifmt mixed

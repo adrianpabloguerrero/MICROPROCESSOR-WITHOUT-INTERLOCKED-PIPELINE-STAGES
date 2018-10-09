@@ -1,0 +1,3 @@
+vhdl work "Banco_de_Registros.vhd"
+vhdl work "ALU.vhd"
+vhdl work "processor.vhd"

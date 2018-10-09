@@ -1,0 +1,1 @@
+-intstyle "ise" -incremental -o "D:/MIPS/processor_tb_isim_beh.exe" -prj "D:/MIPS/processor_tb_beh.prj" "work.processor_tb" 

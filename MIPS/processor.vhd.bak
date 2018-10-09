@@ -1,0 +1,427 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.all;
+use IEEE.STD_LOGIC_UNSIGNED.all;
+
+entity processor is
+port(
+	Clk         : in  std_logic;
+	Reset       : in  std_logic;
+	-- Instruction memory
+	I_Addr      : out std_logic_vector(31 downto 0);
+	I_RdStb     : out std_logic;
+	I_WrStb     : out std_logic;
+	I_DataOut   : out std_logic_vector(31 downto 0);
+	I_DataIn    : in  std_logic_vector(31 downto 0);
+	-- Data memory
+	D_Addr      : out std_logic_vector(31 downto 0);
+	D_RdStb     : out std_logic;
+	D_WrStb     : out std_logic;
+	D_DataOut   : out std_logic_vector(31 downto 0);
+	D_DataIn    : in  std_logic_vector(31 downto 0)
+);
+end processor;
+
+
+architecture processor_arq of processor is
+	-- PERTENECE A ETAPA 1
+	signal PC_SRC : std_logic;
+	signal PC_IN : std_logic_vector(31 downto 0);
+	signal PC_OUT : std_logic_vector(31 downto 0);
+	signal PC_4 : std_logic_vector(31 downto 0);
+	
+	-- REGISTRO IF/ID
+	signal IFID_PC_4 : std_logic_vector(31 downto 0);
+	signal IFID_INST : std_logic_vector(31 downto 0);
+	
+	-- PERTENECE A ETAPA 2
+	signal ALUSRC : std_logic;
+	signal REGDEST : std_logic;
+	signal MEMAREG : std_logic;
+	signal ESCREG : std_logic;
+	signal LEERMEM : std_logic;
+	signal ESCMEM : std_logic;
+	signal SALTOCOND : std_logic;
+	signal ALUOP : std_logic_vector(1 downto 0);
+	signal DATA1 : std_logic_vector(31 downto 0);
+	signal DATA2 : std_logic_vector(31 downto 0);
+	signal SIGN_OUT : std_logic_vector(31 downto 0);
+	COMPONENT Banco_de_Registros
+   PORT(
+         reg1_rd : IN  std_logic_vector(4 downto 0);
+         reg2_rd : IN  std_logic_vector(4 downto 0);
+         reg_wr : IN  std_logic_vector(4 downto 0);
+         data_wr : IN  std_logic_vector(31 downto 0);
+         wr : IN  std_logic;
+         reset : IN  std_logic;
+         clk : IN  std_logic;
+         data1_rd : OUT  std_logic_vector(31 downto 0);
+         data2_rd : OUT  std_logic_vector(31 downto 0)
+        );
+   END COMPONENT;
+	
+	--REGISTRO ID/EX
+	signal IDEX_EX_ALUSRC : std_logic;
+	signal IDEX_EX_ALUOP : std_logic_vector(1 downto 0);
+	signal IDEX_EX_REGDST : std_logic;
+	signal IDEX_M_BRANCH : std_logic;
+	signal IDEX_M_MEMWRITE : std_logic;
+	signal IDEX_M_MEMREAD : std_logic;
+	signal IDEX_W_MEMTOREG : std_logic;
+	signal IDEX_W_REGWRITE : std_logic;
+	signal IDEX_PC_4 : std_logic_vector(31 downto 0);
+	signal IDEX_DATA1 : std_logic_vector(31 downto 0);
+	signal IDEX_DATA2 : std_logic_vector(31 downto 0);
+	signal IDEX_SIGN_OUT : std_logic_vector(31 downto 0);
+	signal IDEX_RT : std_logic_vector(4 downto 0);
+	signal IDEX_RD : std_logic_vector(4 downto 0);
+	
+	-- PERTENECE A ETAPA 3
+	signal REG_DEST : std_logic_vector(4 downto 0);
+	signal ZERO : std_logic;
+	signal ALU_RESULT : std_logic_vector (31 downto 0);
+	signal DATA_WR : std_logic_vector (31 downto 0);
+	signal DIR_B : std_logic_vector (31 downto 0);
+	signal ALU_DATA2 : std_logic_vector (31 downto 0);
+	signal SIGN_OUT_SHIFT : std_logic_vector (31 downto 0);
+	signal ALU_CTRL : std_logic_vector(2 downto 0);
+	COMPONENT Alu
+	PORT(
+		a : IN std_logic_vector(31 downto 0);
+		b : IN std_logic_vector(31 downto 0);
+		ctrl : IN std_logic_vector(2 downto 0);          
+		result : OUT std_logic_vector(31 downto 0);
+		zero : OUT std_logic
+		);
+	END COMPONENT;
+	
+	-- REGISTRO EX/MEM
+	signal EXMEM_EX_ZERO : std_logic;
+	signal EXMEM_EX_REG_DEST : std_logic_vector(4 downto 0);
+	signal EXMEM_EX_ALU_RESULT : std_logic_vector(31 downto 0);
+	signal EXMEM_EX_DATA2 : std_logic_vector(31 downto 0);
+	signal EXMEM_EX_BRANCH_PC : std_logic_vector(31 downto 0);
+	signal EXMEM_EX_MEMREAD : std_logic;
+	signal EXMEM_EX_MEMWRITE : std_logic;
+	signal EXMEM_EX_BRANCH_OP : std_logic;
+	signal EXMEM_W_DATA_WR : std_logic_vector (31 downto 0);
+	signal EXMEM_W_ESCREG : std_logic;
+	
+	-- PERTENECE A ETAPA 4
+	signal EX_ZERO : std_logic;
+	signal EX_REG_DEST : std_logic_vector(4 downto 0);
+	signal EX_ALU_RESULT : std_logic_vector(31 downto 0);
+	signal EX_DATA2 : std_logic_vector(31 downto 0);
+	signal EX_BRANCH_PC : std_logic_vector(31 downto 0);
+	signal EX_MEMREAD : std_logic;
+	signal EX_MEMWRITE : std_logic;
+	signal EX_BRANCH_OP : std_logic;
+	signal EX_W_DATA_WR : std_logic;
+	signal EX_ESCREG_WB: std_logic;
+	signal EX_DATA_WB : std_logic_vector(31 downto 0);
+	signal EX_BRANCH_EFFECTIVE: std_logic;
+	
+	-- REGISTRO MEM/WB
+	signal MEMWB_DATA_REG : std_logic;
+	signal MEMWB_ESCREG : std_logic;
+	signal MEMWB_REGDST : std_logic_vector(4 downto 0);
+	signal MEMWB_READDATA : std_logic_vector(31 downto 0);
+	signal MEMWB_DATA2 : std_logic_vector(31 downto 0);
+	
+	-- PERTENECE A ETAPA 5
+	signal W_MUXDATA : std_logic;
+	signal W_READDATA : std_logic_vector(31 downto 0);
+	signal W_DATA2 : std_logic_vector(31 downto 0);
+	signal W_REGDST : std_logic_vector(4 downto 0);
+	signal W_ESCREG : std_logic;
+	signal W_DATAAREG: std_logic_vector (31 downto 0);
+	
+	COMPONENT memory
+	PORT(
+		Addr : IN std_logic_vector(31 downto 0);
+		DataIn : IN std_logic_vector(31 downto 0);
+		RdStb : IN std_logic;
+		WrStb : IN std_logic;
+		Clk : IN std_logic;          
+		DataOut : OUT std_logic_vector(31 downto 0)
+		);
+	END COMPONENT;
+	
+begin 
+	----------------------------------------
+	----------------------------------------
+	---------------ETAPA 1------------------
+	-- ETAPA PC
+	process (Clk, Reset) is
+	begin
+		if Reset = '0' then
+			PC_OUT <= x"00000000";
+		elsif rising_edge(clk) then
+			PC_OUT <= PC_IN;
+		end if;
+	end process;
+	
+	-- SETEO MI
+	
+	I_WrStb <= '0';
+	I_RdStb <= '1';
+
+	-- ETAPA INCREMENTAL PC
+	
+	PC_4 <= PC_OUT + "100";
+	
+	-- ETAPA MUX PC
+	
+	process (PC_SRC,PC_4, EX_BRANCH_PC) is
+	begin
+		If PC_SRC = '0' then
+			PC_IN <= PC_4;
+		else
+			PC_IN <= EX_BRANCH_PC;
+		end if;
+	end process;
+	
+	-- ID/IF
+	
+	
+	----------------------------------------
+	----------------------------------------
+	---------------ETAPA 2------------------
+	
+	-- PC
+	process (Clk, Reset) is
+	begin
+		If Reset = '1' then
+			IFID_PC_4 <= X"00000000";
+			IFID_INST <= X"00000000";
+		elsif rising_edge(Clk) then
+			IFID_PC_4 <= PC_4;
+			IFID_INST <= I_DataIn;
+		end if;
+	end process;
+	
+	-- SIGN
+	process (IFID_INST) is
+	begin
+		if IFID_INST(15) = '0' then
+			SIGN_OUT <= X"0000" & IFID_INST(15 downto 0);
+		else
+			SIGN_OUT <= X"FFFF" & IFID_INST(15 downto 0);
+		end if;
+	end process;
+	
+	-- CONTROL
+	process (IFID_INST) is
+	begin
+		case (IFID_INST(31 downto 26)) is
+			when "000000" => -- REGAREG
+						ALUSRC <= '0';
+						REGDEST <= '1';
+						MEMAREG <= '0';
+						ESCREG <= '1';
+						LEERMEM <= '0';
+						ESCMEM <= '0';
+						SALTOCOND <= '0';
+						ALUOP <= "10";
+			when "100011" => -- LOAD
+						ALUSRC <= '1';
+						REGDEST <= '0';
+						MEMAREG <= '1';
+						ESCREG <= '1';
+						LEERMEM <= '1';
+						ESCMEM <= '0';
+						SALTOCOND <= '0';
+						ALUOP <= "00";
+			when "101011" => -- STORE
+						ALUSRC <= '1';
+						REGDEST <= '0';
+						MEMAREG <= '0';
+						ESCREG <= '0';
+						LEERMEM <= '0';
+						ESCMEM <= '1';
+						SALTOCOND <= '0';
+						ALUOP <= "00";
+			when "000100" => -- SALTO (BEQ)
+						ALUSRC <= '0';
+						REGDEST <= '0';
+						MEMAREG <= '0';
+						ESCREG <= '0';
+						LEERMEM <= '0';
+						ESCMEM <= '0';
+						SALTOCOND <= '1';
+						ALUOP <= "01";
+			when "001111" => -- LUIP
+						ALUSRC <= '1';
+						REGDEST <= '0';
+						MEMAREG <= '0';
+						ESCREG <= '1';
+						LEERMEM <= '0';
+						ESCMEM <= '0';
+						SALTOCOND <= '0';
+						ALUOP <= "00";			
+			when others => 
+						ALUSRC <= '0';
+						REGDEST <= '0';
+						MEMAREG <= '0';
+						ESCREG <= '0';
+						LEERMEM <= '0';
+						ESCMEM <= '0';
+						SALTOCOND <= '0';
+						ALUOP <= "00";
+		end case;
+	end process;	
+	
+	-- BANCO DE REGISTROS
+	Inst_Banco_de_Registros: Banco_de_Registros PORT MAP(
+		reg1_rd => IFID_INST(25 downto 21),
+		reg2_rd => IFID_INST(20 downto 16),
+		reg_wr => W_REGDST,
+		data_wr => W_DATAAREG,
+		wr => W_ESCREG,
+		reset => Reset,
+		clk => Clk,
+		data1_rd => DATA1,
+		data2_rd => DATA2
+	);
+	
+	-- ID/EX
+	
+	process (Clk) is
+	begin
+		if rising_edge(Clk) then
+			IDEX_EX_ALUSRC <= ALUSRC;
+			IDEX_EX_ALUOP <= ALUOP;
+			IDEX_EX_REGDST <= REGDEST;
+			IDEX_M_BRANCH <= SALTOCOND;
+			IDEX_M_MEMWRITE <= ESCMEM;
+			IDEX_M_MEMREAD <= LEERMEM;
+			IDEX_W_MEMTOREG <= MEMAREG;
+			IDEX_W_REGWRITE <= ESCREG;
+			IDEX_PC_4 <= IFID_PC_4;
+			IDEX_DATA1 <= DATA1;
+			IDEX_DATA2 <= DATA2;
+			IDEX_SIGN_OUT <= SIGN_OUT;
+			IDEX_RT <= IFID_INST(20 downto 16);
+			IDEX_RD <= IFID_INST(15 downto 11);
+		end if;
+	end process;
+	
+	
+	----------------------------------------
+	----------------------------------------
+	---------------ETAPA 3------------------
+	
+	-- MUX REG DESTINO
+	
+	REG_DEST <= IDEX_RT when IDEX_EX_REGDST = '0' else
+					IDEX_RD;
+	
+	-- MUX DATA B
+	
+	ALU_DATA2 <= IDEX_DATA2 when IDEX_EX_ALUSRC = '0' else
+					 IDEX_SIGN_OUT;
+						 
+	-- SHIFT LEFT DIR
+	
+	SIGN_OUT_SHIFT <= IDEX_SIGN_OUT(29 downto 0) & "00";
+	
+	-- ADD DIR
+	
+	DIR_B <= SIGN_OUT_SHIFT + IDEX_PC_4;
+	
+	-- ALU INTANCIACION
+	uut: Alu PORT MAP (
+          a => IDEX_DATA1,
+          b => ALU_DATA2,
+          ctrl => ALU_CTRL,
+          result => ALU_RESULT,
+          zero => ZERO
+        );
+	
+	-- ALU CONTROL
+	
+	process (ALUOP, IDEX_SIGN_OUT) is
+	begin
+		if ALUOP = "00" then
+			ALU_CTRL <= "010";
+		elsif ALUOP = "01" then
+			ALU_CTRL <= "110";
+		else
+			case (IDEX_SIGN_OUT(5 downto 0)) is
+					when "100000" => ALU_CTRL <= "010";
+					when "100010" => ALU_CTRL <= "110";
+					when "100100" => ALU_CTRL <= "000";
+					when "100101" => ALU_CTRL <= "001";
+					when "101010" => ALU_CTRL <= "111";
+					when others => ALU_CTRL <= "000"; --por las dudas
+			end case;
+		end if;
+	end process;
+	
+	-- EX/MEM
+	
+	process (Clk) is
+	begin
+		if rising_edge(Clk) then
+			EXMEM_EX_ZERO <= ZERO;
+			EXMEM_EX_REG_DEST <= REG_DEST;
+			EXMEM_EX_ALU_RESULT <= ALU_RESULT;
+			EXMEM_EX_DATA2 <= ALU_DATA2;
+			EXMEM_EX_BRANCH_PC <= DIR_B;
+			EXMEM_EX_MEMREAD <= IDEX_M_MEMREAD;
+			EXMEM_EX_MEMWRITE <= IDEX_M_MEMWRITE;
+			EXMEM_EX_BRANCH_OP <= IDEX_M_BRANCH;
+			EXMEM_W_DATA_WR <= DATA_WR;
+			EXMEM_W_ESCREG <= IDEX_W_REGWRITE;
+		end if;
+	end process;
+	
+	----------------------------------------
+	----------------------------------------
+	---------------ETAPA 4------------------
+	
+	-- INSTANCIACION DE MEMORIA
+	
+		Inst_memory: memory PORT MAP(
+		Addr => EX_ALU_RESULT,
+		DataIn => EX_DATA2,
+		RdStb => EX_MEMREAD,
+		WrStb => EX_MEMWRITE,
+		Clk => Clk,
+		DataOut => EX_DATA_WB
+	);
+	
+	-- BRANCH CALCULO DE DECISION
+	
+		EX_BRANCH_EFFECTIVE <= EX_BRANCH_OP and ZERO;
+	
+	-- MEM/WB
+	
+		process (Clk) is
+	begin
+		if rising_edge(Clk) then
+			MEMWB_DATA_REG <= EX_W_DATA_WR;
+			MEMWB_ESCREG <= EX_ESCREG_WB;
+			MEMWB_REGDST <= EX_REG_DEST;
+			MEMWB_READDATA <= EX_DATA_WB;
+			MEMWB_DATA2 <= EX_DATA2;
+		end if;
+	end process;
+	
+	----------------------------------------
+	----------------------------------------
+	---------------ETAPA 5------------------
+	
+	W_MUXDATA <= MEMWB_DATA_REG;
+	W_READDATA <= MEMWB_READDATA;
+	W_DATA2 <= MEMWB_DATA2;
+	W_REGDST <= MEMWB_REGDST;
+	W_ESCREG <= MEMWB_ESCREG;
+	
+	-- MULTIPLEXOR DE DATO A REGISTRO
+	
+	W_DATAAREG <= W_READDATA when W_MUXDATA = '0' else
+					  W_DATA2;
+	
+
+					
+end processor_arq;

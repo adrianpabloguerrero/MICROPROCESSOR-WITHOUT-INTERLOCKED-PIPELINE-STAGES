@@ -1,0 +1,3 @@
+vhdl work "D:\MIPS\Banco_de_Registros.vhd"
+vhdl work "D:\MIPS\ALU.vhd"
+vhdl work "D:\MIPS\processor.vhd"

@@ -1,0 +1,8 @@
+EN banco_de_registros NULL D:/MIPS/Banco_de_Registros.vhd sub00/vhpl00 1370998148
+AR processor processor_arq D:/MIPS/processor.vhd sub00/vhpl07 1370998153
+EN memory NULL D:/MIPS/memory.vhd sub00/vhpl04 1370487742
+AR memory mem_arq D:/MIPS/memory.vhd sub00/vhpl05 1370487743
+EN processor NULL D:/MIPS/processor.vhd sub00/vhpl06 1370998152
+AR alu behavioral D:/MIPS/ALU.vhd sub00/vhpl03 1370998151
+AR banco_de_registros behavioral D:/MIPS/Banco_de_Registros.vhd sub00/vhpl01 1370998149
+EN alu NULL D:/MIPS/ALU.vhd sub00/vhpl02 1370998150
